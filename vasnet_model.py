@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from config import  *
 from layer_norm import  *
-
-
+from qlib import *
+ 
 
 class SelfAttention(nn.Module):
 
@@ -26,6 +26,58 @@ class SelfAttention(nn.Module):
 
         self.drop50 = nn.Dropout(0.5)
 
+    def quaternion_dot_product_attention(q,
+                                        k,
+                                        v,
+                                        bias,
+                                        dropout_rate=0.0,
+                                        image_shapes=None,
+                                        name=None,
+                                        make_image_summary=True,
+                                        save_weights_to=None,
+                                        dropout_broadcast_dims=None):
+        """Dot-product attention.
+        Args:
+        q: Tensor with shape [..., length_q, depth_k].
+        k: Tensor with shape [..., length_kv, depth_k]. Leading dimensions must
+        match with q.
+        v: Tensor with shape [..., length_kv, depth_v] Leading dimensions must
+        match with q.
+        bias: bias Tensor (see attention_bias())
+        dropout_rate: a float.
+        image_shapes: optional tuple of integer scalars.
+        see comments for attention_image_summary()
+        name: an optional string
+        make_image_summary: True if you want an image summary.
+        save_weights_to: an optional dictionary to capture attention weights
+        for visualization; the weights tensor will be appended there under
+        a string key created from the variable scope (including name).
+        dropout_broadcast_dims: an optional list of integers less than rank of q.
+        Specifies in which dimensions to broadcast the dropout decisions.
+        Returns:
+        Tensor with shape [..., length_q, depth_v].
+        """
+        v_vals = torch.split(v, 4, dim=-1)
+        output = []
+        
+        # Note: PyTorch doesn't have the equivalent of tf.variable_scope, so we skip it.
+        # Use plain variable names and avoid tf.variable_scope's default_name behavior.
+
+        all_logits = quarternion_attention(q, k)
+        for i, logits in enumerate(all_logits):
+            if bias is not None:
+                bias = bias.to(logits.dtype)
+                logits += bias
+            weights = F.softmax(logits, dim=-1)
+            
+            # Drop out attention links for each head.
+            weights = F.dropout(weights, p=dropout_rate, training=True)
+            
+            o = torch.matmul(weights, v_vals[i])
+            output.append(o)
+        
+        output = torch.cat(output, dim=-1)
+        return output,weights
 
 
     def forward(self, x):
@@ -34,24 +86,7 @@ class SelfAttention(nn.Module):
         K = self.K(x)  # ENC (n x m) => (n x H) H= hidden size
         Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
         V = self.V(x)
-
-        Q *= 0.06
-        logits = torch.matmul(Q, K.transpose(1,0))
-
-        if self.ignore_itself:
-            # Zero the diagonal activations (a distance of each frame with itself)
-            logits[torch.eye(n).byte()] = -float("Inf")
-
-        if self.apperture > 0:
-            # Set attention to zero to frames further than +/- apperture from the current one
-            onesmask = torch.ones(n, n)
-            trimask = torch.tril(onesmask, -self.apperture) + torch.triu(onesmask, self.apperture)
-            logits[trimask == 1] = -float("Inf")
-
-        att_weights_ = nn.functional.softmax(logits, dim=-1)
-        weights = self.drop50(att_weights_)
-        y = torch.matmul(V.transpose(1,0), weights).transpose(1,0)
-        y = self.output_linear(y)
+        y, att_weights_=quaternion_dot_product_attention(q=Q,k=K,v=V,bias=None,dropout=0.5)
 
         return y, att_weights_
 
