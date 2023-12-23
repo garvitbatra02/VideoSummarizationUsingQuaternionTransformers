@@ -26,11 +26,11 @@ class HParameters:
                        'datasets/eccv16_dataset_ovp_google_pool5.h5',
                        'datasets/eccv16_dataset_youtube_google_pool5.h5']
 
-        self.splits = ['/content/videosummcolab/splits/tvsum_splits.json',
-                        '/content/videosummcolab/splits/summe_splits.json']
+        self.splits = ['/content/VideoSummarizationUsingQuaternionTransformers/splits/tvsum_splits.json',
+                        '/content/VideoSummarizationUsingQuaternionTransformers/splits/summe_splits.json']
 
-        self.splits += ['/content/videosummcolab/splits/tvsum_aug_splits.json',
-                        '/content/videosummcolab/splits/summe_aug_splits.json']
+        self.splits += ['/content/VideoSummarizationUsingQuaternionTransformers/splits/tvsum_aug_splits.json',
+                        '/content/VideoSummarizationUsingQuaternionTransformers/splits/summe_aug_splits.json']
 
         return
 
