@@ -26,7 +26,57 @@ class SelfAttention(nn.Module):
 
         self.drop50 = nn.Dropout(0.5)
 
-    def quaternion_dot_product_attention(q,
+
+    def compute_attention_component(self,antecedent,
+                                total_depth,
+                                filter_width=1,
+                                padding="VALID",
+                                name="c",
+                                vars_3d_num_heads=0):
+        """Computes attention compoenent (query, key or value).
+
+        Args:
+            antecedent: a Tensor with shape [batch, length, channels]
+            total_depth: an integer
+            filter_width: An integer specifying how wide you want the attention
+            component to be.
+            padding: One of "VALID", "SAME" or "LEFT". Default is VALID: No padding.
+            name: a string specifying scope name.
+            vars_3d_num_heads: an optional integer (if we want to use 3d variables)
+
+        Returns:
+            c : [batch, length, depth] tensor
+        """
+        input_depth = antecedent.get_shape().as_list()[-1]
+        initializer_stddev = input_depth ** -0.5
+        if "q" in name:
+            depth_per_head = total_depth
+            initializer_stddev *= depth_per_head ** -0.5
+        if vars_3d_num_heads > 0:
+            assert filter_width == 1
+            input_depth = antecedent.get_shape().as_list()[-1]
+            depth_per_head = total_depth // vars_3d_num_heads
+            initializer_stddev = input_depth ** -0.5
+            if "q" in name:
+                initializer_stddev *= depth_per_head ** -0.5
+            var = tf.get_variable(
+                name, [input_depth,
+                    vars_3d_num_heads,
+                    total_depth // vars_3d_num_heads],
+                initializer=tf.random_normal_initializer(stddev=initializer_stddev))
+            var = tf.cast(var, antecedent.dtype)
+            var = tf.reshape(var, [input_depth, total_depth])
+            return tf.tensordot(antecedent, var, axes=1)
+        if filter_width == 1:
+            return quarternion_ffn_3d(antecedent, total_depth, name=name,
+                init=tf.random_normal_initializer(stddev=initializer_stddev))
+            # return common_layers.dense(
+            #     antecedent, total_depth, use_bias=False, name=name)
+        else:
+            return common_layers.conv1d(
+                antecedent, total_depth, filter_width, padding=padding, name=name)
+
+    def quaternion_dot_product_attention(self,q,
                                         k,
                                         v,
                                         bias,
@@ -86,7 +136,12 @@ class SelfAttention(nn.Module):
         K = self.K(x)  # ENC (n x m) => (n x H) H= hidden size
         Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
         V = self.V(x)
-        y, att_weights_=self.quaternion_dot_product_attention(q=Q,k=K,v=V,bias=None,dropout=0.5)
+
+        quat_Query=self.compute_attention_component(antecedent=Q,total_depth=64)
+        quat_Key=self.compute_attention_component(antecedent=K,total_depth=64)
+        quat_Value=self.compute_attention_component(antecedent=V,total_depth=64)
+
+        y, att_weights_=self.quaternion_dot_product_attention(q=quat_Query,k=quat_Key,v=quat_Value,bias=None,dropout_rate=0.5)
 
         return y, att_weights_
 
