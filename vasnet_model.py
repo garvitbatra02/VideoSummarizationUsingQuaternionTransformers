@@ -86,7 +86,7 @@ class SelfAttention(nn.Module):
         K = self.K(x)  # ENC (n x m) => (n x H) H= hidden size
         Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
         V = self.V(x)
-        y, att_weights_=quaternion_dot_product_attention(q=Q,k=K,v=V,bias=None,dropout=0.5)
+        y, att_weights_=self.quaternion_dot_product_attention(q=Q,k=K,v=V,bias=None,dropout=0.5)
 
         return y, att_weights_
 
