@@ -1,181 +1,105 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-import tensorflow as tf
-import numpy as np
-from numpy.random import RandomState
-from tensorflow.python.framework import dtypes
-from tensorflow.python.ops import random_ops
-import random
-
-"""
-Some utils for Quaternion functions and layers.
-
-References:
-
-https://arxiv.org/pdf/1806.04418.pdf
-https://arxiv.org/pdf/1806.07789.pdf
-
-https://github.com/Orkis-Research/light-Recurrent-Neural-Networks
-https://github.com/Orkis-Research/light-Convolutional-Neural-Networks-for-End-to-End-Automatic-Speech-Recognition
-
-Some functions are direct ports from the Pytorch library.
-"""
+import torch
+import torch.nn as nn
 
 def make_quarternion_mul(kernel, concat_dim=0):
-	r, i, j, k = tf.split(kernel, 4, axis=-1)
-	r2 = tf.concat([r, -i, -j, -k], axis=-1)	# 0, 1, 2, 3
-	i2 = tf.concat([i, r, -k, j], axis=-1)	# 1, 0, 3, 2
-	j2 = tf.concat([j, k, r, -i], axis=-1)	# 2, 3, 0, 1
-	k2 = tf.concat([k, -j, i, r],axis=-1)	# 3, 2, 1, 0
-	hamilton = tf.concat([r2, i2, j2, k2], axis=concat_dim)
-	return hamilton
+    r, i, j, k = torch.split(kernel, 4, dim=-1)
+    r2 = torch.cat([r, -i, -j, -k], dim=concat_dim)
+    i2 = torch.cat([i, r, -k, j], dim=concat_dim)
+    j2 = torch.cat([j, k, r, -i], dim=concat_dim)
+    k2 = torch.cat([k, -j, i, r], dim=concat_dim)
+    hamilton = torch.cat([r2, i2, j2, k2], dim=concat_dim)
+    return hamilton
 
 def get_r(x, a=1):
-	return tf.split(x, 4, axis=a)[0]
+    return torch.split(x, 4, dim=a)[0]
 
 def get_i(x, a=1):
-	return tf.split(x, 4, axis=a)[1]
+    return torch.split(x, 4, dim=a)[1]
 
 def get_j(x, a=1):
-	return tf.split(x, 4, axis=a)[2]
+    return torch.split(x, 4, dim=a)[2]
 
 def get_k(x, a=1):
-	return tf.split(x, 4, axis=a)[3]
+    return torch.split(x, 4, dim=a)[3]
 
 def quarternion_attention(a, b):
-	""" Performs dot product attention between two quarternion sequences.
-
-	a = bsz x al x dim
-	b = bsz x bl x dim
-
-	following:
-	(rr' - xx' - yy' - zz')  +
-		(rx' + xr' + yz' - zy')i +
-		(ry' - xz' + yr' + zx')j +
-		(rz' + xy' - yx' + zr')k +
-
-	the output should be one attention matrix for each component (r,i,j,k)
-	"""
-	print("light Attention!")
-	print(a)
-	print(b)
-	al, bl = tf.shape(a)[2], tf.shape(b)[2]
-
-	ar, ax, ay, az = tf.split(a, 4, axis=-1)
-	br, bx, by, bz = tf.split(b, 4, axis=-1)
-	r = tf.matmul(ar, br, transpose_b=True) - tf.matmul(ax, bx, transpose_b=True) - tf.matmul(ay, by, transpose_b=True) - tf.matmul(az, bz, transpose_b=True)
-	i = tf.matmul(ar, bx, transpose_b=True) + tf.matmul(ax, br, transpose_b=True) + tf.matmul(ay, bz, transpose_b=True) - tf.matmul(az, by, transpose_b=True)
-	j = tf.matmul(ar, by, transpose_b=True) - tf.matmul(ax, bz, transpose_b=True) + tf.matmul(ay, br, transpose_b=True) + tf.matmul(az, bx, transpose_b=True)
-	k = tf.matmul(ar, bz, transpose_b=True) + tf.matmul(ax, by, transpose_b=True) - tf.matmul(ay, bx, transpose_b=True) + tf.matmul(az, br, transpose_b=True)
-	return [r, i, j, k]
+    al, bl = a.shape[-2], b.shape[-2]
+    ar, ax, ay, az = torch.split(a, 4, dim=-1)
+    br, bx, by, bz = torch.split(b, 4, dim=-1)
+    r = torch.matmul(ar, br.transpose(-2, -1)) - torch.matmul(ax, bx.transpose(-2, -1)) - torch.matmul(ay, by.transpose(-2, -1)) - torch.matmul(az, bz.transpose(-2, -1))
+    i = torch.matmul(ar, bx.transpose(-2, -1)) + torch.matmul(ax, br.transpose(-2, -1)) + torch.matmul(ay, bz.transpose(-2, -1)) - torch.matmul(az, by.transpose(-2, -1))
+    j = torch.matmul(ar, by.transpose(-2, -1)) - torch.matmul(ax, bz.transpose(-2, -1)) + torch.matmul(ay, br.transpose(-2, -1)) + torch.matmul(az, bx.transpose(-2, -1))
+    k = torch.matmul(ar, bz.transpose(-2, -1)) + torch.matmul(ax, by.transpose(-2, -1)) - torch.matmul(ay, bx.transpose(-2, -1)) + torch.matmul(az, br.transpose(-2, -1))
+    return [r, i, j, k]
 
 def quarternion_dot_product_att(a, b):
-	""" Wrapper for two sequences
-	"""
-	al = tf.shape(a)[1]
-	bl = tf.shape(b)[1]
-	# print(a)
-	d = a.get_shape().as_list()[2]
-	bsz = tf.shape(b)[0]
-	a = tf.reshape(a, [-1, d])
-	a = tf.tile(a, [bl, 1])
-	b = tf.reshape(b, [-1, d])
-	b = tf.tile(b, [al, 1])
-	att = quarternion_dot(a, b)
-	att = tf.reshape(att, [bsz, -1, al * bl])
-	att = tf.reduce_sum(att, 1)
-	return tf.reshape(att, [-1, al * bl])
+    al = a.shape[-2]
+    bl = b.shape[-2]
+    d = a.shape[-1]
+    bsz = a.shape[0]
+    a = a.view(-1, d)
+    a = a.repeat(bl, 1)
+    b = b.view(-1, d)
+    b = b.repeat(al, 1)
+    att = quarternion_dot(a, b)
+    att = att.view(bsz, -1, al * bl)
+    att = torch.sum(att, dim=1)
+    return att.view(-1, al * bl)
 
 def quarternion_dot_3d(q0, q1):
-	d = q0.get_shape().as_list()[2]
-	sq = tf.shape(q0)[1]
-	q0 = tf.reshape(q0, [-1, d])
-	q1 = tf.reshape(q1, [-1, d])
-	out = quarternion_dot(q0, q1)
-	return tf.reshape(out, [-1, sq, d])
+    d = q0.shape[-1]
+    sq = q0.shape[-2]
+    q0 = q0.view(-1, d)
+    q1 = q1.view(-1, d)
+    out = quarternion_dot(q0, q1)
+    return out.view(-1, sq, d)
 
 def quarternion_dot(q0, q1):
-	""" Quarternion product between 2 quarternions
+    q1_r, q1_i, q1_j, q1_k = torch.split(q1, 4, dim=-1)
 
-	returns same shape and acts like element-wise quarternion mul
-	"""
-	q1_r = get_r(q1)
-	q1_i = get_i(q1)
-	q1_j = get_j(q1)
-	q1_k = get_k(q1)
+    r_base = q0 * q1
+    r = get_r(r_base) - get_i(r_base) - get_j(r_base) - get_k(r_base)
 
-	r_base = tf.multiply(q0, q1)
-	r = get_r(r_base) - get_i(r_base) - get_j(r_base) - get_k(r_base)
+    i_base = q0 * torch.cat([q1_i, q1_r, q1_k, q1_j], dim=-1)
+    i = get_r(i_base) + get_i(i_base) + get_j(i_base) - get_k(i_base)
 
-	i_base = tf.multiply(q0, tf.concat([q1_i, q1_r, q1_k, q1_j], 1))
-	i = get_r(i_base) + get_i(i_base) + get_j(i_base) - get_k(i_base)
+    j_base = q0 * torch.cat([q1_j, q1_k, q1_r, q1_i], dim=-1)
+    j = get_r(j_base) - get_i(j_base) + get_j(j_base) + get_k(j_base)
 
-	j_base = tf.multiply(q0, tf.concat([q1_j, q1_k, q1_r, q1_i], 1))
-	j = get_r(j_base) - get_i(j_base) + get_j(j_base) + get_k(j_base)
+    k_base = q0 * torch.cat([q1_k, q1_j, q1_i, q1_r], dim=-1)
+    k = get_r(k_base) + get_i(k_base) - get_j(k_base) + get_k(k_base)
 
-	k_base = tf.multiply(q0, tf.concat([q1_k, q1_j, q1_i, q1_r], 1))
-	k = get_r(k_base) + get_i(k_base) - get_j(k_base) + get_k(k_base)
-
-	return tf.concat([r, i, j, k], 1)
+    return torch.cat([r, i, j, k], dim=-1)
 
 def quarternion_concat(x, axis):
-	""" Helpful if we have 2 quarternions in [r,i,j,k].
-	We can't simply concat them as it would mess the components.
-	So in this case, we extract each component and concat them individually.
-	"""
-	output = [[] for i in range(4)]
-	for _x in x:
-		sp = tf.split(_x, 4, axis=axis)
-		for i in range(4):
-			output[i].append(sp[i])
+    output = [torch.cat([split[i] for split in torch.split(x, 4, dim=axis)], dim=axis) for i in range(4)]
+    return torch.cat(output, dim=axis)
 
-	final = []
-	for o in output:
-		o = tf.concat(o, axis)
-		final.append(o)
+def quarternion_ffn_3d(x, dim, name='', init=None, num_layers=1, activation=None, reuse=None):
+    _d = x.shape[-1]
+    sq = x.shape[-2]
+    x = x.view(-1, _d)
+    x = quarternion_ffn(x, dim, name=name, init=init, num_layers=num_layers, activation=activation, reuse=reuse)
+    x = x.view(-1, sq, dim)
+    return x
 
-	return tf.concat(final, axis)
-
-def quarternion_ffn_3d(x, dim, name='', init=None,
-				num_layers=1, activation=None, reuse=None):
-	""" Quarternion Feed-forward layers to 3D input [bsz x seq_len x dim]
-	returns same shape tensor with new projected dimension.
-	"""
-	print("QFFN layer..")
-	_d = x.get_shape().as_list()[2]
-	sq = tf.shape(x)[1]
-	x = tf.reshape(x, [-1, _d])
-	x = quarternion_ffn(x, dim, name=name, init=init,
-						num_layers=num_layers,
-						activation=activation,reuse=reuse)
-	x = tf.reshape(x, [-1, sq, dim])
-	return x
-
-def quarternion_ffn(x, dim, name='', init=None,
-				num_layers=1, activation=None, reuse=None):
-	""" Implements quarternion feed-forward layer
-
-	x is [bsz x features] tensor
-	"""
-	if(init is None):
-		init = tf.contrib.layers.xavier_initializer()
-		# init = q_xavier_initializer()
-	input_dim = x.get_shape().as_list()[1] // 4
-	with tf.variable_scope('Q{}'.format(name), reuse=reuse) as scope:
-		kernel = tf.get_variable('quarternion', [input_dim, dim], initializer=init)
-		hamilton = make_quarternion_mul(kernel)
-		output = tf.matmul(x, hamilton)
-		if(activation):
-			output = activation(output)
-		return output
+def quarternion_ffn(x, dim, name='', init=None, num_layers=1, activation=None, reuse=None):
+    if init is None:
+        init = nn.init.xavier_normal_  # Use PyTorch's xavier_normal_
+    input_dim = x.shape[-1] // 4
+    with torch.nn.parameter.parameter_scope('Q{}'.format(name)) as scope:
+        kernel = nn.Parameter(torch.empty([input_dim, dim], requires_grad=True))
+        init(kernel)  # Apply initialization
+        hamilton = make_quarternion_mul(kernel)
+        output = torch.matmul(x, hamilton)
+        if activation:
+            output = activation(output)
+        return output
 
 def hamilton_product(x, kernel):
-	h = make_quarternion_mul(kernel)
-	output = tf.matmul(x, h)
-	return output
-
+    h = make_quarternion_mul(kernel)
+    output = torch.matmul(x, h)
+    return output
 # Code beyond this line is not used in this repository.
 
 # class QuarternionRNN(tf.nn.rnn_cell.RNNCell):
