@@ -84,17 +84,17 @@ def quarternion_ffn_3d(x, dim, name='', init=None, num_layers=1, activation=None
     return x
 
 def quarternion_ffn(x, dim, name='', init=None,
-                    num_layers=1, activation=None):
-    if init is None:
-        init = nn.init.xavier_uniform_
-    input_dim = x.size(1) // 4
-    with torch.no_grad():
-        kernel = nn.Parameter(init(torch.empty(input_dim, dim)))
-    hamilton = make_quarternion_mul(kernel)
-    output = torch.matmul(x, hamilton)
-    if activation:
-        output = activation(output)
-    return output
+                    num_layers=1, activation=None,reuse=None):
+	input_dim = x.size(1) // 4
+	with torch.no_grad():
+		kernel = nn.Parameter(init(torch.empty(input_dim, dim)))
+	if init is None:
+		nn.init.xavier_normal_(kernel)  # Assign the function itself
+	hamilton = make_quarternion_mul(kernel)
+	output = torch.matmul(x, hamilton)
+	if activation:
+		output = activation(output)
+	return output
 
 def hamilton_product(x, kernel):
     h = make_quarternion_mul(kernel)

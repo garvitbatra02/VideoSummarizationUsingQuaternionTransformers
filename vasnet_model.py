@@ -27,7 +27,7 @@ class SelfAttention(nn.Module):
         self.drop50 = nn.Dropout(0.5)
 
 
-    def compute_attention_component(self, antecedent, total_depth, filter_width=1, padding="VALID", name="c", vars_3d_num_heads=0):
+    def compute_attention_component(self, antecedent, total_depth, filter_width=2, padding="VALID", name="c", vars_3d_num_heads=0):
         """
         Computes attention component (query, key, or value).
 
