@@ -6,7 +6,8 @@ import torch.nn.functional as F
 from config import  *
 from layer_norm import  *
 from qlib import *
- 
+from Quaternion_ops import *
+from Quaternion_layers import *
 
 class SelfAttention(nn.Module):
 
@@ -19,15 +20,17 @@ class SelfAttention(nn.Module):
         self.m = input_size
         self.output_size = output_size
 
-        self.K = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.Q = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.V = nn.Linear(in_features=self.m, out_features=self.output_size, bias=False)
-        self.output_linear = nn.Linear(in_features=self.output_size, out_features=self.m, bias=False)
+        self.K = QuaternionConv(self.m, self.output_size, kernel_size=1, stride=1,padding=0,bias=False)
+        self.Q = QuaternionConv(self.m, self.output_size, kernel_size=1, stride=1,padding=0,bias=False)
+        self.V = QuaternionConv(self.m, self.output_size, kernel_size=1, stride=1,padding=0,bias=False)
+        self.output_linear = QuaternionConv(self.m, 4, kernel_size=1, stride=1,padding=0,bias=False)
 
+        self.relu = nn.ReLU()
         self.drop50 = nn.Dropout(0.5)
+        
 
 
-    def compute_attention_component(self, antecedent, total_depth, filter_width=2, padding="VALID", name="c", vars_3d_num_heads=0):
+    def compute_attention_component(self, antecedent, total_depth, filter_width=1, padding="VALID", name="c", vars_3d_num_heads=0):
         """
         Computes attention component (query, key, or value).
 
@@ -126,11 +129,23 @@ class SelfAttention(nn.Module):
         Q = self.Q(x)  # ENC (n x m) => (n x H) H= hidden size
         V = self.V(x)
 
-        quat_Query=self.compute_attention_component(antecedent=Q,total_depth=64)
-        quat_Key=self.compute_attention_component(antecedent=K,total_depth=64)
-        quat_Value=self.compute_attention_component(antecedent=V,total_depth=64)
+        Q *= 0.06
+        logits = hamilton_product(Q, K)
 
-        y, att_weights_=self.quaternion_dot_product_attention(q=quat_Query,k=quat_Key,v=quat_Value,bias=None,dropout_rate=0.5)
+        # if self.ignore_itself:
+        #     # Zero the diagonal activations (a distance of each frame with itself)
+        #     logits[torch.eye(n).byte()] = -float("Inf")
+
+        # if self.apperture > 0:
+        #     # Set attention to zero to frames further than +/- apperture from the current one
+        #     onesmask = torch.ones(n, n)
+        #     trimask = torch.tril(onesmask, -self.apperture) + torch.triu(onesmask, self.apperture)
+        #     logits[trimask == 1] = -float("Inf")
+    
+        att_weights_ = q_normalize(logits,-1)
+        weights = self.drop50(att_weights_)
+        y = torch.matmul(V.transpose(1,0), weights).transpose(1,0)
+        y = self.output_linear(y)
 
         return y, att_weights_
 
