@@ -20,10 +20,10 @@ class SelfAttention(nn.Module):
         self.m = input_size
         self.output_size = output_size
 
-        self.K = QuaternionConv(self.m, self.output_size, kernel_size=1, stride=1,padding=0,bias=False)
-        self.Q = QuaternionConv(self.m, self.output_size, kernel_size=1, stride=1,padding=0,bias=False)
-        self.V = QuaternionConv(self.m, self.output_size, kernel_size=1, stride=1,padding=0,bias=False)
-        self.output_linear = QuaternionConv(self.m, 4, kernel_size=1, stride=1,padding=0,bias=False)
+        self.K = QuaternionLinear(self.m, self.output_size,bias=False)
+        self.Q = QuaternionLinear(self.m, self.output_size,bias=False)
+        self.V = QuaternionLinear(self.m, self.output_size,bias=False)
+        self.output_linear = QuaternionLinear(self.m, self.output_size,bias=False)
 
         self.relu = nn.ReLU()
         self.drop50 = nn.Dropout(0.5)
@@ -143,8 +143,8 @@ class SelfAttention(nn.Module):
         #     logits[trimask == 1] = -float("Inf")
     
         att_weights_ = q_normalize(logits,-1)
-        weights = self.drop50(att_weights_)
-        y = torch.matmul(V.transpose(1,0), weights).transpose(1,0)
+        # weights = self.drop50(att_weights_)
+        y = hamilton_product(att_weights_, V)
         y = self.output_linear(y)
 
         return y, att_weights_
