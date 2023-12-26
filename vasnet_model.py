@@ -23,7 +23,7 @@ class SelfAttention(nn.Module):
         self.K = QuaternionLinear(self.m, self.output_size,bias=False)
         self.Q = QuaternionLinear(self.m, self.output_size,bias=False)
         self.V = QuaternionLinear(self.m, self.output_size,bias=False)
-        self.output_linear = QuaternionLinear(self.m, 4,bias=False)
+        self.output_linear = QuaternionLinear(self.m, self.output_size,bias=False)
 
         self.relu = nn.ReLU()
         self.drop50 = nn.Dropout(0.5)
