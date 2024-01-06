@@ -1,11 +1,3 @@
-##########################################################
-# pytorch-qnn v1.0
-# Titouan Parcollet
-# LIA, Université d'Avignon et des Pays du Vaucluse
-# ORKIS, Aix-en-provence
-# October 2018
-##########################################################
-
 import numpy                    as np
 from   numpy.random             import RandomState
 import torch

@@ -66,17 +66,18 @@ class VASNet(nn.Module):
         self.hidden_size = 1024
 
         self.att = SelfAttention(input_size=self.m, output_size=self.m)
-        self.ka = nn.Linear(in_features=self.m, out_features=1024)
-        self.kb = nn.Linear(in_features=self.ka.out_features, out_features=1024)
-        self.kc = nn.Linear(in_features=self.kb.out_features, out_features=1024)
-        self.kd = nn.Linear(in_features=self.ka.out_features, out_features=1)
+                
+        self.ka = QuaternionLinear(self.m, 1024)
+        self.kb = QuaternionLinear(self.m, 1024)
+        self.kc = QuaternionLinear(self.m, 1024)
+        self.kd = nn.Linear(in_features=self.m, out_features=1)
 
         self.sig = nn.Sigmoid()
         self.relu = nn.ReLU()
         self.drop50 = nn.Dropout(0.5)
         self.softmax = nn.Softmax(dim=0)
         self.layer_norm_y = LayerNorm(self.m)
-        self.layer_norm_ka = LayerNorm(self.ka.out_features)
+        self.layer_norm_ka = LayerNorm(self.m)
 
 
     def forward(self, x, seq_len):
